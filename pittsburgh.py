@@ -15,7 +15,7 @@ import h5py
 import warnings
 warnings.filterwarnings("ignore")
 
-root_dir = '/mydata/data/pittsburgh/'
+root_dir = '/mydata/dataset/pittsburgh/'
 if not exists(root_dir):
     raise FileNotFoundError('root_dir is hardcoded, please adjust to point to Pittsburth dataset')
 

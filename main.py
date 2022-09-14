@@ -44,8 +44,8 @@ parser.add_argument('--momentum', type=float, default=0.9, help='Momentum for SG
 parser.add_argument('--nocuda', action='store_true', help='Dont use cuda')
 parser.add_argument('--threads', type=int, default=8, help='Number of threads for each data loader to use')
 parser.add_argument('--seed', type=int, default=123, help='Random seed to use.')
-parser.add_argument('--dataPath', type=str, default='/nfs/ibrahimi/data/', help='Path for centroid data.')
-parser.add_argument('--runsPath', type=str, default='/nfs/ibrahimi/runs/', help='Path to save runs to.')
+parser.add_argument('--dataPath', type=str, default='/home/hj/data/', help='Path for centroid data.')
+parser.add_argument('--runsPath', type=str, default='/home/hj/runs/', help='Path to save runs to.')
 parser.add_argument('--savePath', type=str, default='checkpoints', 
         help='Path to save checkpoints to in logdir. Default=checkpoints/')
 parser.add_argument('--cachePath', type=str, default=environ['TMPDIR'], help='Path to save cache to.')
@@ -107,7 +107,7 @@ def train(epoch):
                     collate_fn=dataset.collate_fn, pin_memory=cuda)
 
         print('Allocated:', torch.cuda.memory_allocated())
-        print('Cached:', torch.cuda.memory_cached())
+        print('Cached:', torch.cuda.memory_reserved())
 
         model.train()
         for iteration, (query, positives, negatives, 
@@ -170,11 +170,11 @@ def train(epoch):
 
 def test(eval_set, epoch=0, write_tboard=False):
     # TODO what if features dont fit in memory? 
-    test_data_loader = DataLoader(dataset=eval_set, 
+    test_data_loader = DataLoader(dataset=eval_set,  # eval set으로 test dataloader 객체 생성
                 num_workers=opt.threads, batch_size=opt.cacheBatchSize, shuffle=False, 
                 pin_memory=cuda)
 
-    model.eval()
+    model.eval() # eval mode로 설정하고, gradient 계산 안하는 상태로,
     with torch.no_grad():
         print('====> Extracting Features')
         pool_size = encoder_dim
@@ -183,8 +183,8 @@ def test(eval_set, epoch=0, write_tboard=False):
 
         for iteration, (input, indices) in enumerate(test_data_loader, 1):
             input = input.to(device)
-            image_encoding = model.encoder(input)
-            vlad_encoding = model.pool(image_encoding) 
+            image_encoding = model.encoder(input) # cnn으로 나온 image embedding
+            vlad_encoding = model.pool(image_encoding) # vlad로 나온 결과
 
             dbFeat[indices.detach().numpy(), :] = vlad_encoding.detach().cpu().numpy()
             if iteration % 50 == 0 or len(test_data_loader) <= 10:
@@ -341,18 +341,18 @@ if __name__ == "__main__":
         torch.cuda.manual_seed(opt.seed)
 
     print('===> Loading dataset(s)')
-    if opt.mode.lower() == 'train':
-        whole_train_set = dataset.get_whole_training_set()
+    if opt.mode.lower() == 'train': # if training mode,
+        whole_train_set = dataset.get_whole_training_set() # get pitts30k_train datasets, only DB
         whole_training_data_loader = DataLoader(dataset=whole_train_set, 
                 num_workers=opt.threads, batch_size=opt.cacheBatchSize, shuffle=False, 
                 pin_memory=cuda)
 
-        train_set = dataset.get_training_query_set(opt.margin)
+        train_set = dataset.get_training_query_set(opt.margin) # get pitts30k_train datasets, only Q
 
         print('====> Training query set:', len(train_set))
         whole_test_set = dataset.get_whole_val_set()
         print('===> Evaluating on val set, query count:', whole_test_set.dbStruct.numQ)
-    elif opt.mode.lower() == 'test':
+    elif opt.mode.lower() == 'test': # if test mode,
         if opt.split.lower() == 'test':
             whole_test_set = dataset.get_whole_test_set()
             print('===> Evaluating on test set')
@@ -363,7 +363,7 @@ if __name__ == "__main__":
             whole_test_set = dataset.get_whole_training_set()
             print('===> Evaluating on train set')
         elif opt.split.lower() == 'val':
-            whole_test_set = dataset.get_whole_val_set()
+            whole_test_set = dataset.get_whole_val_set() # get pitts30k_val datasets
             print('===> Evaluating on val set')
         else:
             raise ValueError('Unknown dataset split: ' + opt.split)

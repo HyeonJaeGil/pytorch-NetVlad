@@ -12,7 +12,10 @@ from PIL import Image
 from sklearn.neighbors import NearestNeighbors
 import h5py
 
-root_dir = '/nfs/ibrahimi/data/pittsburgh/'
+import warnings
+warnings.filterwarnings("ignore")
+
+root_dir = '/home/hj/data/pittsburgh/'
 if not exists(root_dir):
     raise FileNotFoundError('root_dir is hardcoded, please adjust to point to Pittsburth dataset')
 
@@ -227,7 +230,8 @@ class QueryDatasetFromStruct(data.Dataset):
             negSample = np.random.choice(self.potential_negatives[index], self.nNegSample)
             negSample = np.unique(np.concatenate([self.negCache[index], negSample]))
 
-            negFeat = h5feat[negSample.tolist()]
+            negFeat = h5feat[negSample.astype(int).tolist()]
+            # negFeat = h5feat[negSample.tolist()]
             knn.fit(negFeat)
 
             dNeg, negNN = knn.kneighbors(qFeat.reshape(1,-1), 

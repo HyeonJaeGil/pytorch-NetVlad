@@ -16,6 +16,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 root_dir = '/home/hj/data/pittsburgh/'
+# root_dir = '/home/hj/Pittsburgh250k'
 if not exists(root_dir):
     raise FileNotFoundError('root_dir is hardcoded, please adjust to point to Pittsburth dataset')
 
@@ -196,6 +197,7 @@ class QueryDatasetFromStruct(data.Dataset):
             self.nontrivial_positives[i] = np.sort(posi)
         # its possible some queries don't have any non trivial potential positives
         # lets filter those out
+        #원소가 하나인 tuple을 반환하므로 [0]을 선택
         self.queries = np.where(np.array([len(x) for x in self.nontrivial_positives])>0)[0]
 
         # potential negatives are those outside of posDistThr range
@@ -223,7 +225,7 @@ class QueryDatasetFromStruct(data.Dataset):
             posFeat = h5feat[self.nontrivial_positives[index].tolist()]
             knn = NearestNeighbors(n_jobs=-1) # TODO replace with faiss?
             knn.fit(posFeat)
-            dPos, posNN = knn.kneighbors(qFeat.reshape(1,-1), 1)
+            dPos, posNN = knn.kneighbors(qFeat.reshape(1,-1), 1) # best 1
             dPos = dPos.item()
             posIndex = self.nontrivial_positives[index][posNN[0]].item()
 
@@ -235,7 +237,7 @@ class QueryDatasetFromStruct(data.Dataset):
             knn.fit(negFeat)
 
             dNeg, negNN = knn.kneighbors(qFeat.reshape(1,-1), 
-                    self.nNeg*10) # to quote netvlad paper code: 10x is hacky but fine
+                    self.nNeg*10) # to quote netvlad paper code: 10x is hacky but fine (100개의 neighbor)
             dNeg = dNeg.reshape(-1)
             negNN = negNN.reshape(-1)
 
@@ -246,24 +248,25 @@ class QueryDatasetFromStruct(data.Dataset):
                 #if none are violating then skip this query
                 return None
 
-            negNN = negNN[violatingNeg][:self.nNeg]
+            negNN = negNN[violatingNeg][:self.nNeg] # nNeg*10개의 후보 중 가장 margin에 가까운 10개의 index를 선택
             negIndices = negSample[negNN].astype(np.int32)
             self.negCache[index] = negIndices
 
-        query = Image.open(join(queries_dir, self.dbStruct.qImage[index]))
-        positive = Image.open(join(root_dir, self.dbStruct.dbImage[posIndex]))
+        query = Image.open(join(queries_dir, self.dbStruct.qImage[index])) 
+        positive = Image.open(join(root_dir, self.dbStruct.dbImage[posIndex])) # feature space 상으로 가장 가까운 positive
 
         if self.input_transform:
             query = self.input_transform(query)
             positive = self.input_transform(positive)
 
         negatives = []
-        for negIndex in negIndices:
+        for negIndex in negIndices: # 새롭게 추가된 negative index들 10개에 대해서
             negative = Image.open(join(root_dir, self.dbStruct.dbImage[negIndex]))
             if self.input_transform:
                 negative = self.input_transform(negative)
             negatives.append(negative)
 
+        # difference btw torch.cat and torch.stack: https://discuss.pytorch.kr/t/torch-cat-torch-stack/26
         negatives = torch.stack(negatives, 0)
 
         return query, positive, negatives, [index, posIndex]+negIndices.tolist()

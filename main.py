@@ -44,7 +44,7 @@ parser.add_argument('--momentum', type=float, default=0.9, help='Momentum for SG
 parser.add_argument('--nocuda', action='store_true', help='Dont use cuda')
 parser.add_argument('--threads', type=int, default=8, help='Number of threads for each data loader to use')
 parser.add_argument('--seed', type=int, default=123, help='Random seed to use.')
-parser.add_argument('--dataPath', type=str, default='/mydata/dataset/', help='Path for centroid data.')
+parser.add_argument('--dataPath', type=str, default='/mydata', help='Path for centroid data.')
 parser.add_argument('--runsPath', type=str, default='/mydata/runs/', help='Path to save runs to.')
 parser.add_argument('--savePath', type=str, default='checkpoints', 
         help='Path to save checkpoints to in logdir. Default=checkpoints/')
@@ -55,8 +55,10 @@ parser.add_argument('--ckpt', type=str, default='latest',
 parser.add_argument('--evalEvery', type=int, default=1, 
         help='Do a validation set run, and save, every N epochs.')
 parser.add_argument('--patience', type=int, default=10, help='Patience for early stopping. 0 is off.')
-parser.add_argument('--dataset', type=str, default='pittsburgh', 
-        help='Dataset to use', choices=['pittsburgh'])
+parser.add_argument('--trainDataset', type=str, default='snu', 
+        help='Dataset to use', choices=['kaist', 'snu', 'valley'])
+parser.add_argument('--testDataset', type=str, default='kaist', 
+        help='Dataset to use', choices=['kaist', 'snu', 'valley'])
 parser.add_argument('--arch', type=str, default='vgg16', 
         help='basenetwork to use', choices=['vgg16', 'alexnet'])
 parser.add_argument('--vladv2', action='store_true', help='Use VLAD v2')
@@ -65,7 +67,7 @@ parser.add_argument('--pooling', type=str, default='netvlad', help='type of pool
 parser.add_argument('--num_clusters', type=int, default=64, help='Number of NetVlad clusters. Default=64')
 parser.add_argument('--margin', type=float, default=0.1, help='Margin for triplet loss. Default=0.1')
 parser.add_argument('--split', type=str, default='val', help='Data split to use for testing. Default is val', 
-        choices=['test', 'test250k', 'train', 'val'])
+        choices=['test', 'train', 'val'])
 parser.add_argument('--fromscratch', action='store_true', help='Train from scratch rather than using pretrained models')
 
 def train(epoch):
@@ -323,8 +325,17 @@ if __name__ == "__main__":
 
     print(opt)
 
-    if opt.dataset.lower() == 'pittsburgh':
-        import pittsburgh as dataset
+    # if opt.dataset.lower() == 'pittsburgh':
+    #     import pittsburgh as dataset
+    # else:
+    #     raise Exception('Unknown dataset')
+    
+    if opt.trainDataset.lower() == 'kaist':
+        import sthereo as dataset
+    elif opt.trainDataset.lower() == 'snu':
+        import sthereo as dataset
+    elif opt.trainDataset.lower() == 'valley':
+        import sthereo as dataset
     else:
         raise Exception('Unknown dataset')
 
@@ -342,34 +353,32 @@ if __name__ == "__main__":
 
     print('===> Loading dataset(s)')
     if opt.mode.lower() == 'train': # if training mode,
-        whole_train_set = dataset.get_whole_training_set() # get pitts30k_train datasets, only DB
+        whole_train_set = dataset.get_whole_training_set(opt.trainDataset.lower())
         whole_training_data_loader = DataLoader(dataset=whole_train_set, 
                 num_workers=opt.threads, batch_size=opt.cacheBatchSize, shuffle=False, 
                 pin_memory=cuda)
 
-        train_set = dataset.get_training_query_set(opt.margin) # get pitts30k_train datasets, only Q
-
+        train_set = dataset.get_training_query_set(opt.trainDataset.lower(), opt.margin)
         print('====> Training query set:', len(train_set))
-        whole_test_set = dataset.get_whole_val_set()
+
+        whole_test_set = dataset.get_whole_val_set(opt.testDataset.lower())
         print('===> Evaluating on val set, query count:', whole_test_set.dbStruct.numQ)
+    
     elif opt.mode.lower() == 'test': # if test mode,
         if opt.split.lower() == 'test':
-            whole_test_set = dataset.get_whole_test_set()
+            whole_test_set = dataset.get_whole_test_set(opt.testDataset.lower())
             print('===> Evaluating on test set')
-        elif opt.split.lower() == 'test250k':
-            whole_test_set = dataset.get_250k_test_set()
-            print('===> Evaluating on test250k set')
         elif opt.split.lower() == 'train':
-            whole_test_set = dataset.get_whole_training_set()
+            whole_test_set = dataset.get_whole_training_set(opt.trainDataset.lower())
             print('===> Evaluating on train set')
         elif opt.split.lower() == 'val':
-            whole_test_set = dataset.get_whole_val_set() # get pitts30k_val datasets
+            whole_test_set = dataset.get_whole_val_set(opt.testDataset.lower())
             print('===> Evaluating on val set')
         else:
             raise ValueError('Unknown dataset split: ' + opt.split)
         print('====> Query count:', whole_test_set.dbStruct.numQ)
     elif opt.mode.lower() == 'cluster':
-        whole_train_set = dataset.get_whole_training_set(onlyDB=True)
+        whole_train_set = dataset.get_whole_training_set(opt.trainDataset.lower(), onlyDB=True)
 
     print('===> Building model')
 
@@ -490,8 +499,13 @@ if __name__ == "__main__":
         get_clusters(whole_train_set)
     elif opt.mode.lower() == 'train':
         print('===> Training model')
-        writer = SummaryWriter(log_dir=join(opt.runsPath, datetime.now().strftime('%b%d_%H-%M-%S')+'_'+opt.arch+'_'+opt.pooling))
 
+        # writer = SummaryWriter(log_dir=join(opt.runsPath, datetime.now().strftime('%b%d_%H-%M-%S')+'_'+opt.arch+'_'+opt.pooling))
+        writer = SummaryWriter(log_dir=join(opt.runsPath, 
+                        datetime.now().strftime('%b%d_%H-%M-%S')+'_'+ 
+                        opt.arch + '_' + opt.pooling + '_' + 
+                        train_set.dataset + '_' + str(opt.num_clusters)))
+        
         # write checkpoints in logdir
         logdir = writer.file_writer.get_logdir()
         opt.savePath = join(logdir, opt.savePath)
@@ -534,3 +548,4 @@ if __name__ == "__main__":
 
         print("=> Best Recall@5: {:.4f}".format(best_score), flush=True)
         writer.close()
+

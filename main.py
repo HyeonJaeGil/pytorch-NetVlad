@@ -325,11 +325,7 @@ if __name__ == "__main__":
 
     print(opt)
 
-    # if opt.dataset.lower() == 'pittsburgh':
-    #     import pittsburgh as dataset
-    # else:
-    #     raise Exception('Unknown dataset')
-    
+    # import sthereo file anyway
     if opt.trainDataset.lower() == 'kaist':
         import sthereo as dataset
     elif opt.trainDataset.lower() == 'snu':
@@ -371,7 +367,7 @@ if __name__ == "__main__":
         elif opt.split.lower() == 'train':
             whole_test_set = dataset.get_whole_training_set(opt.trainDataset.lower())
             print('===> Evaluating on train set')
-        elif opt.split.lower() == 'val':
+        elif opt.split.lower() == 'val': # not used now.
             whole_test_set = dataset.get_whole_val_set(opt.testDataset.lower())
             print('===> Evaluating on val set')
         else:

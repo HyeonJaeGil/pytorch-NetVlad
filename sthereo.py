@@ -19,10 +19,8 @@ warnings.filterwarnings("ignore")
 
 root_dir = '/mydata/dataset/STHEREO'
 if not exists(root_dir):
-    raise FileNotFoundError('root_dir is hardcoded, please adjust to point to Pittsburth dataset')
+    raise FileNotFoundError('root_dir is hardcoded, please adjust to point to sthereo dataset.')
 
-struct_dir = join(root_dir, 'datasets/')
-queries_dir = join(root_dir, 'queries_real')
 json_dir = join(root_dir, 'config')
 img_folder = 'rgb_left'
 
